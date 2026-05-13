@@ -1,0 +1,11 @@
+{
+  "domain": "auto_cal",
+  "name": "Auto Cal",
+  "codeowners": ["@vantreeseba"],
+  "config_flow": true,
+  "documentation": "https://github.com/vantreeseba/apps/auto-cal-ha-integration",
+  "integration_type": "service",
+  "iot_class": "local_poll",
+  "requirements": ["icalendar>=5.0.0"],
+  "version": "0.1.0"
+}
