@@ -1,6 +1,7 @@
 """Shared test fixtures."""
 from __future__ import annotations
 
+import asyncio as _asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -102,6 +103,14 @@ def mock_api_client():
     client.complete_todo = AsyncMock(
         return_value={"id": "todo-1", "completedAt": "2026-05-14T10:00:00Z"}
     )
+
+    async def _subscribe_never():
+        # Blocks without yielding — simulates an idle connected subscription.
+        # Cancelled cleanly when the background task is torn down.
+        await _asyncio.Event().wait()
+        yield  # unreachable; makes this an async generator
+
+    client.subscribe_todo_updates = _subscribe_never
     return client
 
 

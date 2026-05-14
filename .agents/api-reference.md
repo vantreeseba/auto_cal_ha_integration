@@ -73,6 +73,28 @@ mutation CompleteTodo($id: ID!) {
 }
 ```
 
+### Subscriptions
+
+```
+WebSocket ws://<host>/graphql  (wss:// for HTTPS)
+Sec-WebSocket-Protocol: graphql-transport-ws
+```
+
+Uses the `graphql-ws` v6 protocol. Auth is passed in `connection_init` payload:
+
+```json
+{ "type": "connection_init", "payload": { "authorization": "Bearer <api_key>" } }
+```
+
+Subscriptions used:
+
+```graphql
+subscription { myTodosUpdated { type } }
+subscription { myTodoListsUpdated { type } }
+```
+
+Both fire on create / update / delete. The integration subscribes to both with separate IDs (`"todos"` and `"lists"`) and triggers a full coordinator refresh on every `next` message. The server may send `ping` messages; the client responds with `pong`.
+
 ## Error Handling
 
 | HTTP Status | Exception |

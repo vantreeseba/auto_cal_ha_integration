@@ -39,6 +39,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    sub_task = hass.async_create_background_task(
+        coordinator.async_subscribe_updates(),
+        f"auto_cal_subscription_{entry.entry_id}",
+    )
+
+    def _cancel_subscription() -> None:
+        sub_task.cancel()
+
+    entry.async_on_unload(_cancel_subscription)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     return True

@@ -1,6 +1,7 @@
 """Auto Cal DataUpdateCoordinator."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, time, timedelta, timezone
 from typing import Any
@@ -75,6 +76,31 @@ class AutoCalCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.client = client
 
+    async def async_subscribe_updates(self) -> None:
+        """Maintain a live GraphQL subscription and refresh on every event.
+
+        Reconnects automatically after any network error. Exits cleanly when
+        the background task is cancelled (integration unloaded).
+        """
+        _RETRY_DELAY = 30
+        while True:
+            try:
+                async for _ in self.client.subscribe_todo_updates():
+                    _LOGGER.debug("Subscription event — requesting refresh")
+                    await self.async_request_refresh()
+            except asyncio.CancelledError:
+                return
+            except Exception as err:
+                _LOGGER.warning(
+                    "Auto Cal subscription disconnected (%s) — reconnecting in %ds",
+                    err,
+                    _RETRY_DELAY,
+                )
+                try:
+                    await asyncio.sleep(_RETRY_DELAY)
+                except asyncio.CancelledError:
+                    return
+
     async def _async_update_data(self) -> dict[str, Any]:
         try:
             todo_lists, all_todos, ical_text = await _gather(
@@ -101,6 +127,4 @@ class AutoCalCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
 async def _gather(*coros):  # type: ignore[no-untyped-def]
     """Thin wrapper so tests can patch gather behaviour."""
-    import asyncio
-
     return await asyncio.gather(*coros)

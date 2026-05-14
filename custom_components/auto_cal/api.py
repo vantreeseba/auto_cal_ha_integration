@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+from collections.abc import AsyncIterator
 from typing import Any
 
 import aiohttp
@@ -10,6 +12,8 @@ import aiohttp
 _LOGGER = logging.getLogger(__name__)
 
 GRAPHQL_TIMEOUT = aiohttp.ClientTimeout(total=30)
+_WS_TIMEOUT = aiohttp.ClientWSTimeout(ws_close=10)
+_WS_SUBPROTOCOL = "graphql-transport-ws"
 
 
 class AutoCalApiError(Exception):
@@ -142,6 +146,76 @@ class AutoCalApiClient:
             variables={"id": todo_id},
         )
         return result["data"]["myCompleteTodo"]
+
+    # ------------------------------------------------------------------
+    # Subscriptions
+    # ------------------------------------------------------------------
+
+    async def subscribe_todo_updates(self) -> AsyncIterator[dict[str, Any]]:
+        """Yield graphql-ws subscription events for todos and todo lists.
+
+        Connects via WebSocket, subscribes to myTodosUpdated and
+        myTodoListsUpdated, and yields each 'next' message payload.
+        Raises AutoCalConnectionError on network failure.
+        """
+        ws_url = (
+            self._graphql_url
+            .replace("http://", "ws://", 1)
+            .replace("https://", "wss://", 1)
+        )
+        try:
+            async with self._session.ws_connect(
+                ws_url,
+                protocols=[_WS_SUBPROTOCOL],
+                timeout=_WS_TIMEOUT,
+            ) as ws:
+                await ws.send_json({
+                    "type": "connection_init",
+                    "payload": {"authorization": f"Bearer {self._api_key}"},
+                })
+                raw = await ws.receive()
+                if raw.type != aiohttp.WSMsgType.TEXT:
+                    raise AutoCalConnectionError("WS handshake failed: no text response")
+                ack = json.loads(raw.data)
+                if ack.get("type") != "connection_ack":
+                    raise AutoCalConnectionError(
+                        f"WS handshake failed: expected connection_ack, got {ack.get('type')!r}"
+                    )
+
+                for sub_id, query in (
+                    ("todos", "subscription { myTodosUpdated { type } }"),
+                    ("lists", "subscription { myTodoListsUpdated { type } }"),
+                ):
+                    await ws.send_json({
+                        "type": "subscribe",
+                        "id": sub_id,
+                        "payload": {"query": query},
+                    })
+
+                async for raw in ws:
+                    if raw.type == aiohttp.WSMsgType.TEXT:
+                        msg = json.loads(raw.data)
+                        msg_type = msg.get("type")
+                        if msg_type == "next":
+                            yield msg
+                        elif msg_type == "ping":
+                            await ws.send_json({"type": "pong"})
+                        elif msg_type == "error":
+                            raise AutoCalApiError(f"Subscription error: {msg.get('payload')}")
+                        elif msg_type == "complete":
+                            return
+                    elif raw.type in (
+                        aiohttp.WSMsgType.CLOSE,
+                        aiohttp.WSMsgType.CLOSING,
+                        aiohttp.WSMsgType.ERROR,
+                    ):
+                        raise AutoCalConnectionError(f"WebSocket closed: {raw.type.name}")
+        except AutoCalApiError:
+            raise
+        except aiohttp.ClientConnectionError as err:
+            raise AutoCalConnectionError(f"Cannot connect to {ws_url}") from err
+        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
+            raise AutoCalConnectionError(f"WebSocket error: {err}") from err
 
     # ------------------------------------------------------------------
     # Internal
