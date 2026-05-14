@@ -1,7 +1,8 @@
 """Tests for AutoCalCoordinator."""
 from __future__ import annotations
 
-from unittest.mock import patch
+import asyncio
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.helpers.update_coordinator import UpdateFailed
@@ -82,3 +83,81 @@ async def test_coordinator_ical_parse_error_returns_empty_events(
     await coordinator.async_refresh()
 
     assert coordinator.data["ical_events"] == []
+
+
+# ------------------------------------------------------------------
+# Subscription tests
+# ------------------------------------------------------------------
+
+
+async def test_subscription_event_triggers_refresh(hass, mock_api_client):
+    """Each subscription event should call async_request_refresh."""
+
+    refresh_called = asyncio.Event()
+
+    async def _one_then_idle():
+        yield {"type": "next", "id": "todos", "payload": {}}
+        await asyncio.Event().wait()  # hold connection open
+
+    mock_api_client.subscribe_todo_updates = _one_then_idle
+
+    coordinator = AutoCalCoordinator(hass, mock_api_client)
+    await coordinator.async_refresh()
+    coordinator.async_request_refresh = AsyncMock(
+        side_effect=lambda: refresh_called.set()
+    )
+
+    task = asyncio.ensure_future(coordinator.async_subscribe_updates())
+    await asyncio.wait_for(refresh_called.wait(), timeout=1.0)
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+
+
+async def test_subscription_retries_after_disconnect(hass, mock_api_client):
+    """A connection error should trigger a retry; second attempt should succeed."""
+    call_count = 0
+    refresh_called = asyncio.Event()
+
+    async def _fail_first_then_idle():
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise AutoCalConnectionError("test disconnect")
+        yield {"type": "next", "id": "todos", "payload": {}}
+        await asyncio.Event().wait()
+
+    mock_api_client.subscribe_todo_updates = _fail_first_then_idle
+
+    coordinator = AutoCalCoordinator(hass, mock_api_client)
+    await coordinator.async_refresh()
+    coordinator.async_request_refresh = AsyncMock(
+        side_effect=lambda: refresh_called.set()
+    )
+
+    with patch("asyncio.sleep", AsyncMock(return_value=None)):
+        task = asyncio.ensure_future(coordinator.async_subscribe_updates())
+        await asyncio.wait_for(refresh_called.wait(), timeout=1.0)
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+    assert call_count == 2
+
+
+async def test_subscription_cancelled_exits_cleanly(hass, mock_api_client):
+    """Cancelling the background task should exit without error."""
+
+    async def _idle():
+        await asyncio.Event().wait()
+        yield
+
+    mock_api_client.subscribe_todo_updates = _idle
+
+    coordinator = AutoCalCoordinator(hass, mock_api_client)
+    await coordinator.async_refresh()
+
+    task = asyncio.ensure_future(coordinator.async_subscribe_updates())
+    await asyncio.sleep(0)  # let it start
+    task.cancel()
+    results = await asyncio.gather(task, return_exceptions=True)
+    # Task should finish without raising (CancelledError is caught internally)
+    assert results == [None]
