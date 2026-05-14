@@ -49,8 +49,8 @@ class AutoCalTodoListEntity(CoordinatorEntity[AutoCalCoordinator], TodoListEntit
     _attr_supported_features = (
         TodoListEntityFeature.CREATE_TODO_ITEM
         | TodoListEntityFeature.UPDATE_TODO_ITEM
-        | TodoListEntityFeature.SET_DUE_DATETIME
-        | TodoListEntityFeature.SET_DESCRIPTION
+        | TodoListEntityFeature.SET_DUE_DATETIME_ON_ITEM
+        | TodoListEntityFeature.SET_DESCRIPTION_ON_ITEM
     )
 
     def __init__(
@@ -107,7 +107,7 @@ class AutoCalTodoListEntity(CoordinatorEntity[AutoCalCoordinator], TodoListEntit
         if item.due is not None:
             update_fields["dueAt"] = _to_iso(item.due)
 
-        if item.status == TodoItemStatus.COMPLETE:
+        if item.status == TodoItemStatus.COMPLETED:
             await self.coordinator.client.complete_todo(item.uid)  # type: ignore[arg-type]
             # Still push any other field changes
             if update_fields:
@@ -140,7 +140,7 @@ def _to_todo_item(raw: dict[str, Any]) -> TodoItem:
             due = None
 
     status = (
-        TodoItemStatus.COMPLETE
+        TodoItemStatus.COMPLETED
         if raw.get("completedAt") is not None
         else TodoItemStatus.NEEDS_ACTION
     )

@@ -65,11 +65,13 @@ async def test_coordinator_todos_grouped_by_list(hass, mock_api_client):
 async def test_coordinator_raises_update_failed_on_connection_error(
     hass, mock_api_client
 ):
+    # async_refresh() swallows UpdateFailed internally and sets last_update_success=False.
+    # Use async_config_entry_first_refresh() if you want it re-raised.
     mock_api_client.get_todo_lists.side_effect = AutoCalConnectionError("timeout")
     coordinator = AutoCalCoordinator(hass, mock_api_client)
 
-    with pytest.raises(UpdateFailed):
-        await coordinator.async_refresh()
+    await coordinator.async_refresh()
+    assert coordinator.last_update_success is False
 
 
 async def test_coordinator_ical_parse_error_returns_empty_events(

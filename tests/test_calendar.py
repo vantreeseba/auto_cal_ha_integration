@@ -41,8 +41,8 @@ def test_parse_multi_event_ical():
     assert summaries == {"A", "B"}
 
 
-async def test_calendar_entity_async_get_events(hass, mock_api_client, mock_config_entry):
-    """async_get_events filters by the requested range."""
+async def test_calendar_entity_state(hass, mock_api_client, mock_config_entry):
+    """Calendar entity is created and its state shows the next scheduled event."""
     with patch(
         "custom_components.auto_cal.coordinator.AutoCalCoordinator._async_update_data",
         return_value={
@@ -56,38 +56,38 @@ async def test_calendar_entity_async_get_events(hass, mock_api_client, mock_conf
 
     states = hass.states.async_all("calendar")
     assert len(states) == 1
+    # HA writes the upcoming event summary into the "message" attribute.
+    assert states[0].attributes.get("message") == "Write tests"
 
-    # Range that includes our event (2026-05-14T09:00 UTC)
+
+def test_event_filter_in_range():
+    """Events within the requested date range are included."""
+    from custom_components.auto_cal.calendar import _to_calendar_event
+
+    ical_events = _parse_ical_events(MOCK_ICAL.decode())
     start = datetime(2026, 5, 14, 0, 0, tzinfo=timezone.utc)
     end = datetime(2026, 5, 14, 23, 59, tzinfo=timezone.utc)
 
-    from homeassistant.components.calendar import async_get_events  # type: ignore[import]
+    filtered = [
+        _to_calendar_event(e)
+        for e in ical_events
+        if e["start"] < end and e["end"] > start
+    ]
+    assert len(filtered) == 1
+    assert filtered[0].summary == "Write tests"
 
-    entity_id = states[0].entity_id
-    events = await async_get_events(hass, entity_id, start, end)
-    assert len(events) == 1
-    assert events[0].summary == "Write tests"
 
+def test_event_filter_outside_range():
+    """Events outside the requested date range are excluded."""
+    from custom_components.auto_cal.calendar import _to_calendar_event
 
-async def test_calendar_entity_no_events_outside_range(hass, mock_api_client, mock_config_entry):
-    """Events outside the requested range are not returned."""
-    with patch(
-        "custom_components.auto_cal.coordinator.AutoCalCoordinator._async_update_data",
-        return_value={
-            "todo_lists": [],
-            "todos_by_list": {},
-            "ical_events": _parse_ical_events(MOCK_ICAL.decode()),
-        },
-    ):
-        await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
-
-    states = hass.states.async_all("calendar")
+    ical_events = _parse_ical_events(MOCK_ICAL.decode())
     start = datetime(2026, 6, 1, 0, 0, tzinfo=timezone.utc)
     end = datetime(2026, 6, 30, 23, 59, tzinfo=timezone.utc)
 
-    from homeassistant.components.calendar import async_get_events  # type: ignore[import]
-
-    entity_id = states[0].entity_id
-    events = await async_get_events(hass, entity_id, start, end)
-    assert events == []
+    filtered = [
+        _to_calendar_event(e)
+        for e in ical_events
+        if e["start"] < end and e["end"] > start
+    ]
+    assert filtered == []

@@ -26,7 +26,7 @@ def test_to_todo_item_needs_action():
 def test_to_todo_item_complete():
     item = _to_todo_item(MOCK_TODOS[2])
     assert item.uid == "todo-3"
-    assert item.status == TodoItemStatus.COMPLETE
+    assert item.status == TodoItemStatus.COMPLETED
 
 
 def test_to_todo_item_with_due():
@@ -67,6 +67,9 @@ async def test_todo_entities_created(hass, mock_api_client, mock_config_entry):
             },
             "ical_events": [],
         },
+    ), patch(
+        "custom_components.auto_cal.AutoCalApiClient",
+        return_value=mock_api_client,
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
@@ -74,75 +77,75 @@ async def test_todo_entities_created(hass, mock_api_client, mock_config_entry):
     states = hass.states.async_all("todo")
     names = {s.attributes.get("friendly_name", s.name) for s in states}
     assert len(states) == 2
-    # Both list names should appear somewhere in the entity names
     assert any("Work" in n for n in names)
     assert any("Personal" in n for n in names)
 
 
 async def test_todo_create_item(hass, mock_api_client, mock_config_entry):
     """async_create_todo_item calls client.create_todo and refreshes."""
+    mock_data = {
+        "todo_lists": MOCK_TODO_LISTS,
+        "todos_by_list": {"list-1": [MOCK_TODOS[0]], "list-2": []},
+        "ical_events": [],
+    }
     with patch(
         "custom_components.auto_cal.coordinator.AutoCalCoordinator._async_update_data",
-        return_value={
-            "todo_lists": MOCK_TODO_LISTS,
-            "todos_by_list": {"list-1": [MOCK_TODOS[0]], "list-2": []},
-            "ical_events": [],
-        },
+        return_value=mock_data,
     ), patch(
-        "custom_components.auto_cal.__init__.AutoCalApiClient",
+        "custom_components.auto_cal.AutoCalApiClient",
         return_value=mock_api_client,
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
-    from homeassistant.components.todo import TodoItem, TodoItemStatus
+        states = hass.states.async_all("todo")
+        work_entity = next(
+            (s for s in states if "Work" in (s.attributes.get("friendly_name") or s.name)),
+            None,
+        )
+        assert work_entity is not None
 
-    # Find the Work list entity
-    states = hass.states.async_all("todo")
-    work_entity = next(
-        (s for s in states if "Work" in (s.attributes.get("friendly_name") or s.name)),
-        None,
-    )
-    assert work_entity is not None
+        await hass.services.async_call(
+            "todo",
+            "add_item",
+            {"item": "New task"},
+            target={"entity_id": work_entity.entity_id},
+            blocking=True,
+        )
 
-    await hass.services.async_call(
-        "todo",
-        "add_item",
-        {"item": "New task"},
-        target={"entity_id": work_entity.entity_id},
-        blocking=True,
-    )
     mock_api_client.create_todo.assert_called_once()
 
 
 async def test_todo_complete_item(hass, mock_api_client, mock_config_entry):
-    """Marking an item COMPLETE should call client.complete_todo."""
+    """Marking an item COMPLETED should call client.complete_todo."""
+    mock_data = {
+        "todo_lists": MOCK_TODO_LISTS,
+        "todos_by_list": {"list-1": [MOCK_TODOS[0]], "list-2": []},
+        "ical_events": [],
+    }
     with patch(
         "custom_components.auto_cal.coordinator.AutoCalCoordinator._async_update_data",
-        return_value={
-            "todo_lists": MOCK_TODO_LISTS,
-            "todos_by_list": {"list-1": [MOCK_TODOS[0]], "list-2": []},
-            "ical_events": [],
-        },
+        return_value=mock_data,
     ), patch(
-        "custom_components.auto_cal.__init__.AutoCalApiClient",
+        "custom_components.auto_cal.AutoCalApiClient",
         return_value=mock_api_client,
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
-    states = hass.states.async_all("todo")
-    work_entity = next(
-        (s for s in states if "Work" in (s.attributes.get("friendly_name") or s.name)),
-        None,
-    )
-    assert work_entity is not None
+        states = hass.states.async_all("todo")
+        work_entity = next(
+            (s for s in states if "Work" in (s.attributes.get("friendly_name") or s.name)),
+            None,
+        )
+        assert work_entity is not None
 
-    await hass.services.async_call(
-        "todo",
-        "update_item",
-        {"item": "Write tests", "status": "completed"},
-        target={"entity_id": work_entity.entity_id},
-        blocking=True,
-    )
+        await hass.services.async_call(
+            "todo",
+            "update_item",
+            {"item": "Write tests", "status": "completed"},
+            target={"entity_id": work_entity.entity_id},
+            blocking=True,
+        )
+
     mock_api_client.complete_todo.assert_called_once_with("todo-1")
