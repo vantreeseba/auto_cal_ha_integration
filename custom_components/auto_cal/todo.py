@@ -61,9 +61,17 @@ class AutoCalTodoListEntity(CoordinatorEntity[AutoCalCoordinator], TodoListEntit
     ) -> None:
         super().__init__(coordinator)
         self._list_id: str = todo_list["id"]
-        self._attr_name: str = todo_list["name"]
+        self._list_name: str = todo_list["name"]
         self._attr_unique_id = f"{entry.entry_id}_todo_{self._list_id}"
         self._entry = entry
+
+    @property
+    def name(self) -> str:
+        if self.coordinator.data:
+            for lst in self.coordinator.data.get("todo_lists", []):
+                if lst["id"] == self._list_id:
+                    return lst["name"]
+        return self._list_name
 
     @property
     def device_info(self) -> dict[str, Any]:
