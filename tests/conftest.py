@@ -129,6 +129,21 @@ END:VEVENT
 END:VCALENDAR
 """
 
+# 2026-05-11 is a Monday; block recurs weekly on Mondays.
+MOCK_BLOCKS_ICAL = b"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Auto Cal//EN
+BEGIN:VEVENT
+UID:block-1@auto-cal
+DTSTART:20260511T090000Z
+DTEND:20260511T120000Z
+RRULE:FREQ=WEEKLY;BYDAY=MO
+SUMMARY:Deep Work
+DESCRIPTION:Focus block
+END:VEVENT
+END:VCALENDAR
+"""
+
 
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations):
@@ -143,6 +158,7 @@ def mock_api_client():
     client.get_todo_lists = AsyncMock(return_value=MOCK_TODO_LISTS)
     client.get_todos = AsyncMock(return_value=MOCK_TODOS)
     client.get_ical = AsyncMock(return_value=MOCK_ICAL.decode())
+    client.get_ical_blocks = AsyncMock(return_value=MOCK_BLOCKS_ICAL.decode())
     client.create_todo = AsyncMock(
         return_value={"id": "todo-new", "title": "New", "priority": 0, "dueAt": None, "scheduledAt": None}
     )

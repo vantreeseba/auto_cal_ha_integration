@@ -106,10 +106,18 @@ class AutoCalApiClient:
         return result["data"]["myHabitDetail"]
 
     async def get_ical(self) -> str:
+        """Fetch the default schedule feed (scheduled todos + habits)."""
+        return await self._get_ical({"secret": self._api_key})
+
+    async def get_ical_blocks(self) -> str:
+        """Fetch the recurring time-blocks feed (RRULE:FREQ=WEEKLY events)."""
+        return await self._get_ical({"secret": self._api_key, "view": "blocks"})
+
+    async def _get_ical(self, params: dict[str, str]) -> str:
         try:
             async with self._session.get(
                 self._ical_url,
-                params={"secret": self._api_key},
+                params=params,
                 timeout=GRAPHQL_TIMEOUT,
             ) as resp:
                 if resp.status in (401, 403):

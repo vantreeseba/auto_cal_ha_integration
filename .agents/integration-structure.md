@@ -11,7 +11,7 @@ custom_components/auto_cal/
 ├── coordinator.py       # AutoCalCoordinator(DataUpdateCoordinator) + habit progress summary
 ├── api.py               # AutoCalApiClient — all HTTP/GraphQL calls
 ├── entity.py            # AutoCalHabitEntity — shared base (one HA device per habit)
-├── calendar.py          # AutoCalCalendarEntity(CoordinatorEntity, CalendarEntity)
+├── calendar.py          # AutoCalCalendarEntity (Schedule) + AutoCalTimeBlocksEntity (recurring blocks)
 ├── todo.py              # AutoCalTodoListEntity(CoordinatorEntity, TodoListEntity)
 ├── button.py            # AutoCalHabitCompleteButton — "Log completion" per habit
 ├── sensor.py            # AutoCalHabitProgressSensor + AutoCalHabitRateSensor per habit
@@ -34,7 +34,8 @@ tests/
 
 | Platform | Entity | Count | Source |
 |----------|--------|-------|--------|
-| `calendar` | `AutoCalCalendarEntity` | 1 per entry | `/ical?secret=<key>` (todos + habits) |
+| `calendar` | `AutoCalCalendarEntity` (Schedule) | 1 per entry | `/ical?secret=<key>` (todos + habits) |
+| `calendar` | `AutoCalTimeBlocksEntity` (Time Blocks) | 1 per entry | `/ical?secret=<key>&view=blocks` (recurring RRULE blocks) |
 | `todo` | `AutoCalTodoListEntity` | 1 per list | `myTodos(listId:)` GraphQL |
 | `button` | `AutoCalHabitCompleteButton` | 1 per habit | `myCompleteHabit` on press |
 | `sensor` | `AutoCalHabitProgressSensor`, `AutoCalHabitRateSensor` | 2 per habit | `myHabits` + `myHabitDetail` |
@@ -47,7 +48,8 @@ Each habit gets its own HA **device** (`via_device` → the config entry's devic
 ```
 ConfigEntry
   └── AutoCalCoordinator (15-min poll)
-        ├── AutoCalCalendarEntity        (calendar platform)
+        ├── AutoCalCalendarEntity        (calendar platform — Schedule)
+        ├── AutoCalTimeBlocksEntity      (calendar platform — Time Blocks)
         ├── AutoCalTodoListEntity × N     (todo platform, one per list)
         └── per habit (device):           (button/sensor/binary_sensor platforms)
               ├── AutoCalHabitCompleteButton
@@ -63,6 +65,8 @@ _async_update_data()
   ├── client.get_todo_lists()   → coordinator.data["todo_lists"]
   ├── client.get_todos()        → coordinator.data["todos_by_list"]
   ├── client.get_ical()         → coordinator.data["ical_events"] (parsed)
+  ├── _async_fetch_blocks()     → coordinator.data["block_events"] (RRULE defs)
+  │     └── client.get_ical_blocks()  (degrades to [] if view=blocks unsupported)
   └── _async_fetch_habits()     → coordinator.data["habits"] + ["habit_progress"]
         ├── client.get_habits()                → habit list (static fields)
         └── client.get_habit_detail(id) × N    → summarized per-habit progress
@@ -76,6 +80,8 @@ _async_update_data()
     "todo_lists": list[dict],           # from myTodoLists query
     "todos_by_list": dict[str, list[dict]],  # list_id → todos
     "ical_events": list[dict],          # [{uid, summary, start, end, description}]
+    "block_events": list[dict],         # [{uid, summary, start, end, description, rrule}]
+                                        #   RRULE templates; expanded per-range in calendar.py
     "habits": list[dict],               # from myHabits query
     "habit_progress": dict[str, dict],  # habit_id → {completions, target,
                                         #   current_rate, trailing_rate,

@@ -93,6 +93,28 @@ async def test_coordinator_fetches_habits(hass, mock_api_client):
     assert progress["habit-2"]["completions"] == 5
 
 
+async def test_coordinator_fetches_blocks(hass, mock_api_client):
+    coordinator = AutoCalCoordinator(hass, mock_api_client)
+    await coordinator.async_refresh()
+
+    blocks = coordinator.data["block_events"]
+    assert len(blocks) == 1
+    assert blocks[0]["summary"] == "Deep Work"
+    assert blocks[0]["rrule"] == "FREQ=WEEKLY;BYDAY=MO"
+
+
+async def test_coordinator_blocks_degrade_gracefully(hass, mock_api_client):
+    """A blocks API error should not fail the whole update."""
+    mock_api_client.get_ical_blocks.side_effect = AutoCalApiError("no blocks support")
+    coordinator = AutoCalCoordinator(hass, mock_api_client)
+    await coordinator.async_refresh()
+
+    assert coordinator.last_update_success is True
+    assert coordinator.data["block_events"] == []
+    # Schedule calendar still populated.
+    assert len(coordinator.data["ical_events"]) == 1
+
+
 async def test_coordinator_habits_degrade_gracefully(hass, mock_api_client):
     """A habits API error should not fail the whole update."""
     mock_api_client.get_habits.side_effect = AutoCalApiError("no habits support")
