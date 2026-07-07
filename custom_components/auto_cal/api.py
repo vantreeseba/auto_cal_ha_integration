@@ -75,6 +75,36 @@ class AutoCalApiClient:
         )
         return result["data"]["myTodos"]
 
+    async def get_habits(self) -> list[dict[str, Any]]:
+        result = await self._graphql(
+            """
+            query MyHabits {
+              myHabits {
+                id title description priority estimatedLength
+                frequencyCount frequencyUnit
+                activityType { id name color }
+              }
+            }
+            """
+        )
+        return result["data"]["myHabits"]
+
+    async def get_habit_detail(
+        self, habit_id: str, periods: int = 8
+    ) -> dict[str, Any]:
+        result = await self._graphql(
+            """
+            query MyHabitDetail($id: ID!, $periods: Int) {
+              myHabitDetail(habitId: $id, periods: $periods) {
+                habitId title totalCompletions allTimeRate
+                periods { label completions target rate }
+              }
+            }
+            """,
+            variables={"id": habit_id, "periods": periods},
+        )
+        return result["data"]["myHabitDetail"]
+
     async def get_ical(self) -> str:
         try:
             async with self._session.get(
@@ -146,6 +176,29 @@ class AutoCalApiClient:
             variables={"id": todo_id},
         )
         return result["data"]["myCompleteTodo"]
+
+    async def delete_todo(self, todo_id: str) -> bool:
+        result = await self._graphql(
+            """
+            mutation DeleteTodo($id: ID!) {
+              myDeleteTodo(id: $id)
+            }
+            """,
+            variables={"id": todo_id},
+        )
+        return result["data"]["myDeleteTodo"]
+
+    async def complete_habit(self, habit_id: str) -> dict[str, Any]:
+        """Record a completion for a habit at the current time."""
+        result = await self._graphql(
+            """
+            mutation CompleteHabit($input: CompleteHabitArgs!) {
+              myCompleteHabit(input: $input) { id completedAt }
+            }
+            """,
+            variables={"input": {"habitId": habit_id}},
+        )
+        return result["data"]["myCompleteHabit"]
 
     # ------------------------------------------------------------------
     # Subscriptions

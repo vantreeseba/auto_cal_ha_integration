@@ -1,10 +1,11 @@
 # Project: Auto Cal — Home Assistant Integration
 
 A Home Assistant custom integration that connects to an [Auto Cal](../auto-cal) instance to surface:
-- **Calendar** — reads the `/ical` endpoint (current + next week of scheduled items)
+- **Calendar** — reads the `/ical` endpoint (current + next week of scheduled todos and habits)
 - **Todo lists** — reads/writes todo lists and items via the GraphQL API
+- **Habits** — one device per habit exposing a "Log completion" button, progress + completion-rate sensors, and a "Goal met" binary sensor (GraphQL `myHabits` / `myHabitDetail` / `myCompleteHabit`)
 
-Users configure a server URL and an `acal_` API key (generated in Auto Cal's Settings page).
+Tracks auto-cal **v1.16.0**. Users configure a server URL and an `acal_` API key (generated in Auto Cal's Settings page).
 
 ## Commands
 

@@ -7,10 +7,14 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from custom_components.auto_cal.api import AutoCalConnectionError
-from custom_components.auto_cal.coordinator import AutoCalCoordinator, _parse_ical_events
+from custom_components.auto_cal.api import AutoCalApiError, AutoCalConnectionError
+from custom_components.auto_cal.coordinator import (
+    AutoCalCoordinator,
+    _parse_ical_events,
+    _summarize_habit_progress,
+)
 
-from .conftest import MOCK_ICAL, MOCK_TODO_LISTS, MOCK_TODOS
+from .conftest import MOCK_HABIT_DETAILS, MOCK_ICAL, MOCK_TODO_LISTS, MOCK_TODOS
 
 
 # ------------------------------------------------------------------
@@ -40,6 +44,30 @@ def test_parse_ical_events_bad_data():
 
 
 # ------------------------------------------------------------------
+# _summarize_habit_progress unit tests (no HA needed)
+# ------------------------------------------------------------------
+
+
+def test_summarize_habit_progress_uses_current_period():
+    summary = _summarize_habit_progress(MOCK_HABIT_DETAILS["habit-1"])
+    # Current period is the LAST entry in periods.
+    assert summary["completions"] == 2
+    assert summary["target"] == 3
+    assert summary["total_completions"] == 10
+    # Trailing rate averages the four period rates.
+    assert 0.8 < summary["trailing_rate"] < 0.85
+
+
+def test_summarize_habit_progress_empty_periods():
+    summary = _summarize_habit_progress(
+        {"habitId": "x", "totalCompletions": 0, "allTimeRate": 0.0, "periods": []}
+    )
+    assert summary["completions"] == 0
+    assert summary["target"] == 0
+    assert summary["trailing_rate"] == 0.0
+
+
+# ------------------------------------------------------------------
 # Coordinator integration tests
 # ------------------------------------------------------------------
 
@@ -52,6 +80,30 @@ async def test_coordinator_fetches_data(hass, mock_api_client):
     assert len(coordinator.data["todo_lists"]) == 2
     assert "list-1" in coordinator.data["todos_by_list"]
     assert len(coordinator.data["ical_events"]) == 1
+
+
+async def test_coordinator_fetches_habits(hass, mock_api_client):
+    coordinator = AutoCalCoordinator(hass, mock_api_client)
+    await coordinator.async_refresh()
+
+    assert len(coordinator.data["habits"]) == 2
+    progress = coordinator.data["habit_progress"]
+    assert progress["habit-1"]["completions"] == 2
+    assert progress["habit-1"]["target"] == 3
+    assert progress["habit-2"]["completions"] == 5
+
+
+async def test_coordinator_habits_degrade_gracefully(hass, mock_api_client):
+    """A habits API error should not fail the whole update."""
+    mock_api_client.get_habits.side_effect = AutoCalApiError("no habits support")
+    coordinator = AutoCalCoordinator(hass, mock_api_client)
+    await coordinator.async_refresh()
+
+    assert coordinator.last_update_success is True
+    assert coordinator.data["habits"] == []
+    assert coordinator.data["habit_progress"] == {}
+    # Todos and calendar still populated.
+    assert len(coordinator.data["todo_lists"]) == 2
 
 
 async def test_coordinator_todos_grouped_by_list(hass, mock_api_client):

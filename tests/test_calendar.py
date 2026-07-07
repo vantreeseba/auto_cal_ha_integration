@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 import pytest
+from freezegun import freeze_time
 
 from custom_components.auto_cal.coordinator import _parse_ical_events
 
@@ -41,14 +42,21 @@ def test_parse_multi_event_ical():
     assert summaries == {"A", "B"}
 
 
+@freeze_time("2026-05-14T09:30:00Z")
 async def test_calendar_entity_state(hass, mock_api_client, mock_config_entry):
-    """Calendar entity is created and its state shows the next scheduled event."""
+    """Calendar entity is created and its state shows the next scheduled event.
+
+    Clock is pinned inside the mock event's window so this stays deterministic
+    regardless of the real date.
+    """
     with patch(
         "custom_components.auto_cal.coordinator.AutoCalCoordinator._async_update_data",
         return_value={
             "todo_lists": [],
             "todos_by_list": {},
             "ical_events": _parse_ical_events(MOCK_ICAL.decode()),
+            "habits": [],
+            "habit_progress": {},
         },
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)

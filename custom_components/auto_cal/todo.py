@@ -49,6 +49,7 @@ class AutoCalTodoListEntity(CoordinatorEntity[AutoCalCoordinator], TodoListEntit
     _attr_supported_features = (
         TodoListEntityFeature.CREATE_TODO_ITEM
         | TodoListEntityFeature.UPDATE_TODO_ITEM
+        | TodoListEntityFeature.DELETE_TODO_ITEM
         | TodoListEntityFeature.SET_DUE_DATETIME_ON_ITEM
         | TodoListEntityFeature.SET_DESCRIPTION_ON_ITEM
     )
@@ -129,6 +130,12 @@ class AutoCalTodoListEntity(CoordinatorEntity[AutoCalCoordinator], TodoListEntit
         elif update_fields:
             await self.coordinator.client.update_todo(item.uid, **update_fields)  # type: ignore[arg-type]
 
+        await self.coordinator.async_refresh()
+
+    async def async_delete_todo_items(self, uids: list[str]) -> None:
+        """Delete items (used by the frontend to clear completed items)."""
+        for uid in uids:
+            await self.coordinator.client.delete_todo(uid)
         await self.coordinator.async_refresh()
 
 

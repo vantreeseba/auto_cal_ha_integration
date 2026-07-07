@@ -149,3 +149,40 @@ async def test_todo_complete_item(hass, mock_api_client, mock_config_entry):
         )
 
     mock_api_client.complete_todo.assert_called_once_with("todo-1")
+
+
+async def test_todo_delete_item(hass, mock_api_client, mock_config_entry):
+    """Removing an item should call client.delete_todo."""
+    mock_data = {
+        "todo_lists": MOCK_TODO_LISTS,
+        "todos_by_list": {"list-1": [MOCK_TODOS[0]], "list-2": []},
+        "ical_events": [],
+        "habits": [],
+        "habit_progress": {},
+    }
+    with patch(
+        "custom_components.auto_cal.coordinator.AutoCalCoordinator._async_update_data",
+        return_value=mock_data,
+    ), patch(
+        "custom_components.auto_cal.AutoCalApiClient",
+        return_value=mock_api_client,
+    ):
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        states = hass.states.async_all("todo")
+        work_entity = next(
+            (s for s in states if "Work" in (s.attributes.get("friendly_name") or s.name)),
+            None,
+        )
+        assert work_entity is not None
+
+        await hass.services.async_call(
+            "todo",
+            "remove_item",
+            {"item": "Write tests"},
+            target={"entity_id": work_entity.entity_id},
+            blocking=True,
+        )
+
+    mock_api_client.delete_todo.assert_called_once_with("todo-1")

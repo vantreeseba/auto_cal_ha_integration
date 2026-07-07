@@ -69,6 +69,53 @@ MOCK_TODOS = [
     },
 ]
 
+MOCK_HABITS = [
+    {
+        "id": "habit-1",
+        "title": "Exercise",
+        "description": "Move every day",
+        "priority": 70,
+        "estimatedLength": 45,
+        "frequencyCount": 3,
+        "frequencyUnit": "week",
+        "activityType": {"id": "at-2", "name": "Personal", "color": "#22c55e"},
+    },
+    {
+        "id": "habit-2",
+        "title": "Read",
+        "description": None,
+        "priority": 40,
+        "estimatedLength": 30,
+        "frequencyCount": 5,
+        "frequencyUnit": "week",
+        "activityType": None,
+    },
+]
+
+MOCK_HABIT_DETAILS = {
+    "habit-1": {
+        "habitId": "habit-1",
+        "title": "Exercise",
+        "totalCompletions": 10,
+        "allTimeRate": 0.9,
+        "periods": [
+            {"label": "3w ago", "completions": 3, "target": 3, "rate": 1.0},
+            {"label": "2w ago", "completions": 2, "target": 3, "rate": 0.6667},
+            {"label": "Last week", "completions": 3, "target": 3, "rate": 1.0},
+            {"label": "This week", "completions": 2, "target": 3, "rate": 0.6667},
+        ],
+    },
+    "habit-2": {
+        "habitId": "habit-2",
+        "title": "Read",
+        "totalCompletions": 20,
+        "allTimeRate": 1.0,
+        "periods": [
+            {"label": "This week", "completions": 5, "target": 5, "rate": 1.0},
+        ],
+    },
+}
+
 MOCK_ICAL = b"""BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Auto Cal//EN
@@ -102,6 +149,16 @@ def mock_api_client():
     client.update_todo = AsyncMock(return_value=MOCK_TODOS[0])
     client.complete_todo = AsyncMock(
         return_value={"id": "todo-1", "completedAt": "2026-05-14T10:00:00Z"}
+    )
+    client.delete_todo = AsyncMock(return_value=True)
+    client.get_habits = AsyncMock(return_value=MOCK_HABITS)
+
+    async def _habit_detail(habit_id, periods=8):
+        return MOCK_HABIT_DETAILS[habit_id]
+
+    client.get_habit_detail = AsyncMock(side_effect=_habit_detail)
+    client.complete_habit = AsyncMock(
+        return_value={"id": "comp-1", "completedAt": "2026-05-14T10:00:00Z"}
     )
 
     async def _subscribe_never():

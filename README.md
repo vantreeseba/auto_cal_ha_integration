@@ -10,8 +10,9 @@ A [Home Assistant](https://www.home-assistant.io/) integration for [Auto Cal](ht
 |----------|----------|--------|
 | **Calendar** | One `calendar` entity showing your scheduled week | Auto Cal's `/ical` endpoint |
 | **To-do lists** | One `todo` entity per Auto Cal list (e.g. Work, Personal) | Auto Cal's GraphQL API |
+| **Habits** | One device per habit — a **Log completion** button, **Progress** + **Completion rate** sensors, and a **Goal met** binary sensor | Auto Cal's GraphQL API |
 
-The calendar shows all todos and habits Auto Cal has scheduled for the current and next ISO week. Each todo list is a fully interactive HA to-do list — you can add, rename, complete, and set due dates without leaving Home Assistant.
+The calendar shows all todos and habits Auto Cal has scheduled for the current and next ISO week. Each todo list is a fully interactive HA to-do list — you can add, rename, complete, and set due dates without leaving Home Assistant. Each habit becomes its own device you can log completions on and track against its weekly/monthly goal.
 
 ## Prerequisites
 
@@ -22,8 +23,8 @@ The calendar shows all todos and habits Auto Cal has scheduled for the current a
 
 1. Open Auto Cal in your browser and go to **Settings → API Keys**
 2. Click **Create API Key**, give it a name (e.g. `Home Assistant`), and choose scopes:
-   - `read` — lets HA fetch your calendar and todo lists
-   - `write` — additionally lets HA create and complete todos
+   - `read` — lets HA fetch your calendar, todo lists, and habits
+   - `write` — additionally lets HA create/complete/delete todos and log habit completions
 3. Copy the `acal_…` token — it is shown **once** and cannot be retrieved again
 
 ## Installation
@@ -67,8 +68,21 @@ The integration polls every 15 minutes. You can trigger an immediate refresh fro
 | Set due date/time | ✅ (requires `write` scope) |
 | Set description | ✅ (requires `write` scope) |
 | Complete / uncomplete | ✅ (requires `write` scope) |
-| Delete item | ❌ (Auto Cal has no delete-todo API) |
+| Delete item | ✅ (requires `write` scope) — also clears completed items |
 | Reorder items | ❌ |
+
+### Habits
+
+Each Auto Cal habit is exposed as its own device with these entities:
+
+| Entity | Type | Description |
+|--------|------|-------------|
+| **Log completion** | `button` | Records a completion now (requires `write` scope) |
+| **Progress** | `sensor` | Completions logged this period; attributes include `target`, `remaining`, `frequency_unit`, `activity_type` |
+| **Completion rate** | `sensor` | Trailing completion rate (%) across recent periods |
+| **Goal met** | `binary_sensor` | `on` once completions reach the habit's target for the current period |
+
+Habit changes made outside Home Assistant appear on the next 15-minute poll; pressing **Log completion** refreshes immediately. Habits also appear on the **Calendar** when Auto Cal schedules them.
 
 ## Options
 
