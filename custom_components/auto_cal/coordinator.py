@@ -35,6 +35,16 @@ def _summarize_habit_progress(detail: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _ensure_aware(value: Any) -> datetime:
+    """Normalise an iCal date/datetime to a timezone-aware UTC datetime."""
+    if not isinstance(value, datetime):
+        # All-day events arrive as plain dates.
+        value = datetime.combine(value, time.min, tzinfo=timezone.utc)
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value
+
+
 def _parse_ical_events(ical_text: str) -> list[dict[str, Any]]:
     """Parse an iCal feed and return a list of event dicts."""
     # Lazy import so HA only imports icalendar after it has been installed.
@@ -51,20 +61,8 @@ def _parse_ical_events(ical_text: str) -> list[dict[str, Any]]:
             if component.name != "VEVENT":
                 continue
 
-            start = component["DTSTART"].dt
-            end = component["DTEND"].dt
-
-            # Normalise date → datetime (all-day events)
-            if not isinstance(start, datetime):
-                start = datetime.combine(start, time.min, tzinfo=timezone.utc)
-            if not isinstance(end, datetime):
-                end = datetime.combine(end, time.min, tzinfo=timezone.utc)
-
-            # Ensure timezone-aware
-            if start.tzinfo is None:
-                start = start.replace(tzinfo=timezone.utc)
-            if end.tzinfo is None:
-                end = end.replace(tzinfo=timezone.utc)
+            start = _ensure_aware(component["DTSTART"].dt)
+            end = _ensure_aware(component["DTEND"].dt)
 
             description_raw = component.get("DESCRIPTION")
             description = str(description_raw) if description_raw else None
@@ -82,6 +80,51 @@ def _parse_ical_events(ical_text: str) -> list[dict[str, Any]]:
         _LOGGER.error("Failed to parse iCal data: %s", err)
 
     return events
+
+
+def _parse_ical_blocks(ical_text: str) -> list[dict[str, Any]]:
+    """Parse the time-blocks feed into recurring-block definitions.
+
+    Blocks are ``RRULE:FREQ=WEEKLY`` VEVENTs. Each dict keeps the template
+    ``start``/``end`` (first occurrence) and the raw ``rrule`` string; the
+    calendar entity expands occurrences on demand for a requested range.
+    """
+    try:
+        from icalendar import Calendar  # type: ignore[import]
+    except ImportError:
+        _LOGGER.error("icalendar library not installed")
+        return []
+
+    blocks: list[dict[str, Any]] = []
+    try:
+        cal = Calendar.from_ical(ical_text)
+        for component in cal.walk():
+            if component.name != "VEVENT":
+                continue
+
+            start = _ensure_aware(component["DTSTART"].dt)
+            end = _ensure_aware(component["DTEND"].dt)
+
+            rrule = component.get("RRULE")
+            rrule_str = rrule.to_ical().decode() if rrule else None
+
+            description_raw = component.get("DESCRIPTION")
+            description = str(description_raw) if description_raw else None
+
+            blocks.append(
+                {
+                    "uid": str(component.get("UID", "")),
+                    "summary": str(component.get("SUMMARY", "")),
+                    "description": description,
+                    "start": start,
+                    "end": end,
+                    "rrule": rrule_str,
+                }
+            )
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.error("Failed to parse iCal blocks: %s", err)
+
+    return blocks
 
 
 class AutoCalCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -137,6 +180,7 @@ class AutoCalCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             todos_by_list.setdefault(list_id, []).append(todo)
 
         ical_events = _parse_ical_events(ical_text)
+        block_events = await self._async_fetch_blocks()
 
         habits, habit_progress = await self._async_fetch_habits()
 
@@ -144,9 +188,24 @@ class AutoCalCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "todo_lists": todo_lists,
             "todos_by_list": todos_by_list,
             "ical_events": ical_events,
+            "block_events": block_events,
             "habits": habits,
             "habit_progress": habit_progress,
         }
+
+    async def _async_fetch_blocks(self) -> list[dict[str, Any]]:
+        """Fetch the recurring time-blocks feed.
+
+        Degrades to an empty list (rather than failing the whole update) so
+        the schedule calendar and todos keep working against servers that do
+        not expose the ``view=blocks`` feed.
+        """
+        try:
+            block_text = await self.client.get_ical_blocks()
+        except AutoCalApiError as err:
+            _LOGGER.warning("Auto Cal time blocks unavailable: %s", err)
+            return []
+        return _parse_ical_blocks(block_text)
 
     async def _async_fetch_habits(
         self,

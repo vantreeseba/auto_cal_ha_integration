@@ -21,7 +21,7 @@ Default (no `view`): returns `text/calendar` for the computed **schedule** over 
 - `SUMMARY`: item title
 - `DESCRIPTION`: multi-line (`Type: Todo|Habit`, Activity, Priority, Estimated)
 
-`view=blocks`: returns recurring **time blocks** as `RRULE:FREQ=WEEKLY` events (`UID`: `block-{id}@auto-cal`). This integration does **not** request this view — it only consumes the default schedule feed.
+`view=blocks`: returns recurring **time blocks** as `RRULE:FREQ=WEEKLY` events (`UID`: `block-{id}@auto-cal`). The integration fetches this feed via `client.get_ical_blocks()` and surfaces it as the separate **Time Blocks** calendar entity. The RRULE templates are expanded into concrete occurrences on demand (per queried range) using `dateutil.rrule` (ships with HA core).
 
 **Limitation**: the default schedule feed only covers 2 weeks; requests outside that window return no events.
 
