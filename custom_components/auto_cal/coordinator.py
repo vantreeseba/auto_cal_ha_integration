@@ -10,9 +10,29 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import AutoCalApiClient, AutoCalApiError
-from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
+from .const import DEFAULT_SCAN_INTERVAL, DOMAIN, HABIT_DETAIL_PERIODS
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _summarize_habit_progress(detail: dict[str, Any]) -> dict[str, Any]:
+    """Reduce a myHabitDetail payload to the fields entities consume.
+
+    ``periods`` runs oldest → current, so the last entry is the current
+    week/month. ``trailing_rate`` averages the per-period completion rates
+    across the returned window.
+    """
+    periods = detail.get("periods") or []
+    current = periods[-1] if periods else {}
+    rates = [float(p.get("rate", 0.0)) for p in periods]
+    return {
+        "completions": int(current.get("completions", 0)),
+        "target": int(current.get("target", 0)),
+        "current_rate": float(current.get("rate", 0.0)),
+        "trailing_rate": (sum(rates) / len(rates)) if rates else 0.0,
+        "all_time_rate": float(detail.get("allTimeRate", 0.0)),
+        "total_completions": int(detail.get("totalCompletions", 0)),
+    }
 
 
 def _parse_ical_events(ical_text: str) -> list[dict[str, Any]]:
@@ -118,11 +138,50 @@ class AutoCalCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         ical_events = _parse_ical_events(ical_text)
 
+        habits, habit_progress = await self._async_fetch_habits()
+
         return {
             "todo_lists": todo_lists,
             "todos_by_list": todos_by_list,
             "ical_events": ical_events,
+            "habits": habits,
+            "habit_progress": habit_progress,
         }
+
+    async def _async_fetch_habits(
+        self,
+    ) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
+        """Fetch habits and their current-period progress.
+
+        Degrades gracefully to empty data (rather than failing the whole
+        update) if the server does not support habits or the calls error,
+        so todos and the calendar keep working against older servers.
+        """
+        try:
+            habits = await self.client.get_habits()
+        except AutoCalApiError as err:
+            _LOGGER.warning("Auto Cal habits unavailable: %s", err)
+            return [], {}
+
+        progress: dict[str, dict[str, Any]] = {}
+        if not habits:
+            return habits, progress
+
+        try:
+            details = await _gather(
+                *(
+                    self.client.get_habit_detail(h["id"], HABIT_DETAIL_PERIODS)
+                    for h in habits
+                )
+            )
+        except AutoCalApiError as err:
+            _LOGGER.warning("Auto Cal habit details unavailable: %s", err)
+            return habits, progress
+
+        for habit, detail in zip(habits, details):
+            if detail is not None:
+                progress[habit["id"]] = _summarize_habit_progress(detail)
+        return habits, progress
 
 
 async def _gather(*coros):  # type: ignore[no-untyped-def]
