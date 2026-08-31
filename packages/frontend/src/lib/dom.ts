@@ -36,24 +36,38 @@ declare global {
   }
 }
 
-/** Define a custom element and list it in the Lovelace "Add card" picker. */
+/**
+ * Define a custom element and list it in the Lovelace "Add card" picker.
+ *
+ * Registration is guarded so that one card failing to define (a duplicate
+ * name, a browser that rejects the definition) still leaves the others usable.
+ */
 export function registerCard(
   element: CustomElementConstructor,
   entry: CustomCardEntry,
 ): void {
-  if (!customElements.get(entry.type)) {
-    customElements.define(entry.type, element);
-  }
+  if (!defineElement(entry.type, element)) return;
   window.customCards = window.customCards ?? [];
   if (!window.customCards.some((card) => card.type === entry.type)) {
     window.customCards.push(entry);
   }
 }
 
-/** Define a helper element (card editors, rows) without picker registration. */
+/**
+ * Define a helper element (card editors, rows) without picker registration.
+ *
+ * Returns false if the element is not available for use afterwards.
+ */
 export function defineElement(
   name: string,
   element: CustomElementConstructor,
-): void {
-  if (!customElements.get(name)) customElements.define(name, element);
+): boolean {
+  try {
+    if (!customElements.get(name)) customElements.define(name, element);
+    return true;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(`auto-cal: could not define <${name}>`, err);
+    return false;
+  }
 }
