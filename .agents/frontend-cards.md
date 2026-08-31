@@ -29,7 +29,8 @@ packages/frontend/
 │       ├── activity-card.ts       # custom:auto-cal-activity-card
 │       ├── timeline-card.ts       # custom:auto-cal-activity-timeline-card
 │       └── editor.ts              # ha-form based visual editors
-└── test/                          # vitest — parsing/selection, entity discovery, card rendering
+└── test/                          # vitest — parsing/selection, entity discovery, card rendering,
+                                   #          plus a browser-compat scan of the built bundle
 custom_components/auto_cal/
 ├── frontend.py                    # static path + add_extra_js_url registration
 └── www/auto-cal-cards.js          # BUILT ARTIFACT — committed, never hand-edited
@@ -62,6 +63,37 @@ warning; setup never fails because of the cards.
 
 Bump `manifest.json` `version` to cache-bust the browser copy — the URL carries
 `?v=<manifest version>`.
+
+## Browser support — keep it boring
+
+A dashboard is opened from wherever it is mounted: old Fire tablets, hand-me-down
+iPads, the companion app's WebView, a TV browser. Those engines are years behind
+the desktop Chrome the cards get written in, and a single unsupported *syntax*
+token means the whole bundle fails to parse — every card on the dashboard
+becomes "Custom element doesn't exist", not just the new feature.
+
+So:
+
+- **Build target is `es2015`** (`build.mjs`). Write modern TypeScript freely —
+  esbuild lowers `?.`, `??`, `??=`, spread and async for you. What it cannot
+  lower is *library* methods, so avoid `Array.prototype.flat`/`flatMap`,
+  `replaceAll`, `Object.hasOwn`, `structuredClone` and friends.
+- **CSS sticks to long-supported properties.** Notably, flex `gap` is ignored
+  before Safari 14.1, so spacing is written as margins (`> * + * { margin-… }`).
+  Anything newer goes behind `@supports` with a plain fallback — see `.chip`
+  in `lib/styles.ts`, which is a solid accent chip everywhere and a tinted one
+  where `color-mix()` exists.
+- **Dates are parsed with `parseDateString()`.** Only strict ISO is portable;
+  Safari returns `Invalid Date` for the space-separated and `+0000` forms Home
+  Assistant hands out. Events that fail to parse are dropped rather than
+  rendered as `NaN%`-wide segments.
+- **Nothing fails loudly.** `registerCard()` swallows a failed definition so
+  the other card still works, and `render()` catches template errors and paints
+  the message into the card.
+
+`test/bundle-compat.test.ts` scans the committed bundle for the forbidden
+tokens, so a target bump or a stray modern method fails CI rather than a user's
+tablet.
 
 ## Where the activity comes from
 

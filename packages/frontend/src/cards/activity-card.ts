@@ -109,20 +109,29 @@ export class AutoCalActivityCard extends AutoCalBaseCard<ActivityCardConfig> {
           line-height: 1.15;
           color: var(--auto-cal-accent);
           margin: 8px 0 2px;
-          overflow-wrap: anywhere;
+          word-break: break-word;
+          overflow-wrap: break-word;
         }
         .idle .activity { color: var(--primary-text-color); }
-        .summary { font-size: 1.05rem; margin-bottom: 2px; overflow-wrap: anywhere; }
+        .summary {
+          font-size: 1.05rem;
+          margin-bottom: 2px;
+          word-break: break-word;
+          overflow-wrap: break-word;
+        }
         .facts {
           display: flex;
           flex-wrap: wrap;
-          gap: 4px 10px;
           font-size: 0.85rem;
           color: var(--secondary-text-color);
         }
-        .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        /* Spacing as margins: flex gap is ignored before Safari 14.1. */
+        .facts > span { margin: 0 10px 4px 0; }
+        .top { display: flex; align-items: center; justify-content: space-between; }
+        .top > * + * { margin-left: 8px; }
         .slot { font-size: 0.85rem; color: var(--secondary-text-color); white-space: nowrap; }
-        .progress { margin-top: 14px; display: grid; gap: 6px; }
+        .progress { margin-top: 14px; }
+        .progress > * + * { margin-top: 6px; }
         .progress .labels {
           display: flex; justify-content: space-between;
           font-size: 0.8rem; color: var(--secondary-text-color);
@@ -133,15 +142,19 @@ export class AutoCalActivityCard extends AutoCalBaseCard<ActivityCardConfig> {
           border-top: 1px solid var(--divider-color);
           display: flex;
           align-items: baseline;
-          gap: 8px;
           font-size: 0.9rem;
         }
+        .next > * + * { margin-left: 8px; }
         .next .dot {
           width: 8px; height: 8px; border-radius: 50%;
           flex: 0 0 auto; align-self: center;
         }
         .next .when { color: var(--secondary-text-color); white-space: nowrap; }
-        .next .what { font-weight: 600; overflow-wrap: anywhere; }
+        .next .what {
+          font-weight: 600;
+          word-break: break-word;
+          overflow-wrap: break-word;
+        }
       </style>
       <ha-card style="--auto-cal-accent: ${escapeHtml(accent)}">
         ${this.config.name ? `<div class="header">${escapeHtml(this.config.name)}</div>` : ""}

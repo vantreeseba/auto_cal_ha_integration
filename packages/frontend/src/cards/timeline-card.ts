@@ -126,12 +126,19 @@ export class AutoCalTimelineCard extends AutoCalBaseCard<TimelineCardConfig> {
           color: var(--secondary-text-color);
         }
         .tick { position: absolute; transform: translateX(-50%); }
-        .list { margin-top: 12px; display: grid; gap: 8px; }
-        .row { display: flex; align-items: baseline; gap: 8px; font-size: 0.9rem; }
+        /* Margins rather than gap: flex gap is ignored before Safari 14.1. */
+        .list { margin-top: 12px; }
+        .list > .row + .row { margin-top: 8px; }
+        .row { display: flex; align-items: baseline; font-size: 0.9rem; }
+        .row > * + * { margin-left: 8px; }
         .row .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; align-self: center; }
         .row .time { color: var(--secondary-text-color); white-space: nowrap; font-variant-numeric: tabular-nums; }
         .row .what { font-weight: 600; }
-        .row .detail { color: var(--secondary-text-color); overflow-wrap: anywhere; }
+        .row .detail {
+          color: var(--secondary-text-color);
+          word-break: break-word;
+          overflow-wrap: break-word;
+        }
         .empty { color: var(--secondary-text-color); font-size: 0.9rem; margin-top: 12px; }
       </style>
       <ha-card>
@@ -156,11 +163,16 @@ export class AutoCalTimelineCard extends AutoCalBaseCard<TimelineCardConfig> {
     const hourOf = (date: Date): number =>
       (date.getTime() - dayStart.getTime()) / 3600_000;
 
-    const hours = events.flatMap((e) => [hourOf(e.start), hourOf(e.end)]);
+    // Built by hand — `Array.prototype.flatMap` is missing from older WebViews.
+    const hours: number[] = [];
+    for (const event of events) {
+      hours.push(hourOf(event.start), hourOf(event.end));
+    }
     hours.push(hourOf(now));
 
-    const from = Math.max(0, Math.floor(Math.min(DEFAULT_START_HOUR, ...hours)));
-    const to = Math.min(24, Math.ceil(Math.max(DEFAULT_END_HOUR, ...hours)));
+    const finite = hours.filter((hour) => Number.isFinite(hour));
+    const from = Math.max(0, Math.floor(Math.min(DEFAULT_START_HOUR, ...finite)));
+    const to = Math.min(24, Math.ceil(Math.max(DEFAULT_END_HOUR, ...finite)));
     return from < to ? [from, to] : [DEFAULT_START_HOUR, DEFAULT_END_HOUR];
   }
 
@@ -175,6 +187,7 @@ export class AutoCalTimelineCard extends AutoCalBaseCard<TimelineCardConfig> {
         const left = position(event.start);
         const right = position(event.end);
         const width = right - left;
+        if (!Number.isFinite(left) || !Number.isFinite(width)) return "";
         if (right <= 0 || left >= 100 || width <= 0) return "";
 
         const clampedLeft = Math.max(0, left);
@@ -192,7 +205,7 @@ export class AutoCalTimelineCard extends AutoCalBaseCard<TimelineCardConfig> {
   }
 
   private nowMarker(left: number): string {
-    if (left < 0 || left > 100) return "";
+    if (!Number.isFinite(left) || left < 0 || left > 100) return "";
     return `<div class="now" style="left:${left.toFixed(2)}%"></div>`;
   }
 

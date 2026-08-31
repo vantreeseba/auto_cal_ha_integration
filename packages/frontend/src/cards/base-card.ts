@@ -6,6 +6,8 @@
  * read via `entityIds()`.
  */
 import { fetchActivityEvents } from "../lib/calendar-api.js";
+import { escapeHtml } from "../lib/dom.js";
+import { BASE_STYLES } from "../lib/styles.js";
 import type { ActivityEvent, Hass, LovelaceCardConfig } from "../lib/types.js";
 
 /** How often the visible countdown / progress bar is recomputed. */
@@ -64,7 +66,9 @@ export abstract class AutoCalBaseCard<
   }
 
   connectedCallback(): void {
-    this.ticker ??= setInterval(() => this.onTick(), TICK_MS);
+    if (this.ticker === undefined) {
+      this.ticker = setInterval(() => this.onTick(), TICK_MS);
+    }
     this.render();
   }
 
@@ -129,11 +133,23 @@ export abstract class AutoCalBaseCard<
 
   protected render(): void {
     if (!this.config) return;
-    const html = this.template(new Date());
+    let html: string;
+    try {
+      html = this.template(new Date());
+    } catch (err) {
+      // Never leave a blank card behind: show what went wrong instead.
+      html = `<style>${BASE_STYLES}</style><ha-card><div class="error">${escapeHtml(
+        err instanceof Error ? err.message : String(err),
+      )}</div></ha-card>`;
+    }
     if (html === this.lastHtml) return;
     this.lastHtml = html;
     this.root.innerHTML = html;
-    this.afterRender();
+    try {
+      this.afterRender();
+    } catch {
+      // A failed listener hookup must not take the rendered card with it.
+    }
   }
 
   protected query<T extends Element>(selector: string): T | null {

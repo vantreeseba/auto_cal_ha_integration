@@ -17,7 +17,11 @@ const options = {
   outfile: resolve(repoRoot, "custom_components/auto_cal/www/auto-cal-cards.js"),
   bundle: true,
   format: "iife",
-  target: "es2021",
+  // Deliberately old: the cards must parse in whatever browser the dashboard
+  // is open in — wall-mounted Fire tablets, older iPads, embedded WebViews.
+  // Anything newer (optional chaining, `??=`) is a syntax error there, which
+  // kills the whole bundle, not just one feature.
+  target: "es2015",
   minify: true,
   sourcemap: false,
   legalComments: "none",
