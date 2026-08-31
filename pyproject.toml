@@ -9,6 +9,12 @@ description = "Home Assistant integration for Auto Cal"
 requires-python = ">=3.12"
 dependencies = ["icalendar>=5.0.0"]
 
+# The repo is an npm-workspace monorepo, so `packages/` sits alongside
+# `custom_components/` and setuptools' flat-layout auto-discovery bails out on
+# the ambiguity. Only the integration package is ever installed.
+[tool.setuptools]
+packages = ["custom_components.auto_cal"]
+
 [project.optional-dependencies]
 test = [
     "pytest>=8.0",

@@ -16,9 +16,14 @@ custom_components/auto_cal/
 ├── button.py            # AutoCalHabitCompleteButton — "Log completion" per habit
 ├── sensor.py            # AutoCalHabitProgressSensor + AutoCalHabitRateSensor per habit
 ├── binary_sensor.py     # AutoCalHabitGoalMetBinarySensor per habit
+├── frontend.py          # Serves + auto-loads the bundled Lovelace cards
 ├── strings.json         # UI strings (referenced by translations/en.json)
-└── translations/
-    └── en.json          # English translations for config flow
+├── translations/
+│   └── en.json          # English translations for config flow
+└── www/
+    └── auto-cal-cards.js  # Built from packages/frontend — committed, never hand-edited
+
+packages/frontend/        # TypeScript source for the Lovelace cards (see .agents/frontend-cards.md)
 
 tests/
 ├── __init__.py
@@ -27,7 +32,8 @@ tests/
 ├── test_coordinator.py  # coordinator data fetching, habit progress, error handling
 ├── test_calendar.py     # calendar entity event parsing + filtering
 ├── test_todo.py         # todo CRUD — create, update, complete, delete
-└── test_habit.py        # habit button + progress/rate sensors + goal-met binary sensor
+├── test_habit.py        # habit button + progress/rate sensors + goal-met binary sensor
+└── test_frontend.py     # card bundle presence + static-path/extra-js registration
 ```
 
 ## Platform Map
@@ -42,6 +48,8 @@ tests/
 | `binary_sensor` | `AutoCalHabitGoalMetBinarySensor` | 1 per habit | `myHabitDetail` (completions ≥ target) |
 
 Each habit gets its own HA **device** (`via_device` → the config entry's device), grouping its button + sensors together.
+
+Not a platform: `frontend.py` registers the card bundle once per HA instance from `async_setup_entry` — a static path at `/auto_cal/auto-cal-cards.js` plus `add_extra_js_url`.
 
 ## Entity Hierarchy
 

@@ -25,9 +25,38 @@ jobs:
       - name: Run tests
         run: pytest --tb=short
 
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build the card bundle
+        run: npm run build
+
+      # The bundle is committed so HACS installs need no toolchain — it must
+      # therefore match what the current source builds to.
+      - name: Verify the committed bundle is up to date
+        run: git diff --exit-code -- custom_components/auto_cal/www
+
   release:
     name: Release
-    needs: test
+    needs: [test, frontend]
     runs-on: ubuntu-latest
     # Only release on direct pushes to main, not on PRs.
     if: github.event_name == 'push'
