@@ -21,6 +21,7 @@ packages/frontend/
 │   │   ├── activity.ts            # DESCRIPTION / UID parsing  ← the core domain logic
 │   │   ├── calendar-api.ts        # /api/calendars fetch + current/next selection
 │   │   ├── colors.ts              # stable colour per activity type
+│   │   ├── entities.ts            # finds our calendars — ids are host-derived, so match on platform
 │   │   ├── time.ts, dom.ts, styles.ts
 │   │   └── types.ts               # structural types for the bits of `hass` we touch
 │   └── cards/
@@ -28,7 +29,7 @@ packages/frontend/
 │       ├── activity-card.ts       # custom:auto-cal-activity-card
 │       ├── timeline-card.ts       # custom:auto-cal-activity-timeline-card
 │       └── editor.ts              # ha-form based visual editors
-└── test/activity.test.ts          # vitest — parsing, selection, formatting
+└── test/                          # vitest — parsing/selection, entity discovery, card rendering
 custom_components/auto_cal/
 ├── frontend.py                    # static path + add_extra_js_url registration
 └── www/auto-cal-cards.js          # BUILT ARTIFACT — committed, never hand-edited
@@ -92,6 +93,16 @@ colours with the `activity_colors:` config option.
 |------|--------|-------|
 | `custom:auto-cal-activity-card` | `entity` (required), `blocks_entity`, `name`, `show_details`, `show_progress`, `show_next`, `activity_colors` | Current activity, progress through the slot, what's next |
 | `custom:auto-cal-activity-timeline-card` | `entity` (required), `blocks_entity`, `name`, `start_hour`, `end_hour`, `show_list`, `activity_colors` | Today as a lane coloured by activity, with a now-marker |
+
+### Finding the calendars
+
+Entity ids are slugified from the config entry title, which is the Auto Cal
+**host** — `calendar.auto_cal_local_4000_schedule`, or
+`calendar.192_168_1_10_4000_schedule` for an IP. Nothing in the id is
+guaranteed to contain "auto_cal", so `getStubConfig()` (and anything else
+looking for our entities) must go through `findAutoCalCalendars()`, which
+matches `hass.entities[id].platform === "auto_cal"` and only falls back to
+name matching when the registry is unavailable. Never match on the id text.
 
 Both extend `AutoCalBaseCard`, which handles: config validation, re-fetching
 when a tracked calendar entity changes (and at most every 5 min), a 15 s ticker

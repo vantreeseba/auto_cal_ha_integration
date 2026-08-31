@@ -8,9 +8,10 @@
 import { currentEvent, eventFromAttributes, nextEvent } from "../lib/calendar-api.js";
 import { colorForActivity, type ColorOverrides } from "../lib/colors.js";
 import { escapeHtml, showMoreInfo } from "../lib/dom.js";
+import { findAutoCalCalendars } from "../lib/entities.js";
 import { BASE_STYLES } from "../lib/styles.js";
 import { formatClock, formatDuration, progressFraction } from "../lib/time.js";
-import type { ActivityEvent, LovelaceCardConfig } from "../lib/types.js";
+import type { ActivityEvent, Hass, LovelaceCardConfig } from "../lib/types.js";
 import { AutoCalBaseCard } from "./base-card.js";
 
 export interface ActivityCardConfig extends LovelaceCardConfig {
@@ -34,15 +35,9 @@ export class AutoCalActivityCard extends AutoCalBaseCard<ActivityCardConfig> {
     return document.createElement("auto-cal-activity-card-editor");
   }
 
-  static getStubConfig(hass: { states: Record<string, unknown> }): Partial<ActivityCardConfig> {
-    const calendars = Object.keys(hass.states).filter((id) =>
-      id.startsWith("calendar."),
-    );
-    const autoCal = calendars.filter((id) => id.includes("auto_cal"));
-    return {
-      entity: autoCal.find((id) => !id.includes("time_block")) ?? calendars[0] ?? "",
-      blocks_entity: autoCal.find((id) => id.includes("time_block")),
-    };
+  static getStubConfig(hass: Hass): Partial<ActivityCardConfig> {
+    const { schedule, blocks } = findAutoCalCalendars(hass);
+    return { entity: schedule ?? "", blocks_entity: blocks };
   }
 
   getCardSize(): number {

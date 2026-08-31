@@ -20,8 +20,18 @@ export interface HassLocale {
   time_format?: string;
 }
 
+/** The entity-registry view the frontend exposes on `hass.entities`. */
+export interface EntityRegistryEntry {
+  entity_id: string;
+  platform: string;
+  device_id?: string | null;
+  area_id?: string | null;
+}
+
 export interface Hass {
   states: Record<string, HassEntity | undefined>;
+  /** Absent on older frontends — always guard before reading. */
+  entities?: Record<string, EntityRegistryEntry | undefined>;
   locale?: HassLocale;
   language?: string;
   callApi<T>(method: string, path: string, parameters?: unknown): Promise<T>;

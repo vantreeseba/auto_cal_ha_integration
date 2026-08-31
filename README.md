@@ -8,12 +8,12 @@ A [Home Assistant](https://www.home-assistant.io/) integration for [Auto Cal](ht
 
 | Platform | Entities | Source |
 |----------|----------|--------|
-| **Calendar** | One `calendar` entity showing your scheduled week | Auto Cal's `/ical` endpoint |
+| **Calendar** | Two `calendar` entities — **Schedule** (what's scheduled) and **Time Blocks** (your recurring blocks) | Auto Cal's `/ical` endpoint |
 | **To-do lists** | One `todo` entity per Auto Cal list (e.g. Work, Personal) | Auto Cal's GraphQL API |
 | **Habits** | One device per habit — a **Log completion** button, **Progress** + **Completion rate** sensors, and a **Goal met** binary sensor | Auto Cal's GraphQL API |
 | **Lovelace cards** | A **Current Activity** card and an **Activity Timeline** card, installed with the integration | The calendar entities above |
 
-The calendar shows all todos and habits Auto Cal has scheduled for the current and next ISO week. Each todo list is a fully interactive HA to-do list — you can add, rename, complete, and set due dates without leaving Home Assistant. Each habit becomes its own device you can log completions on and track against its weekly/monthly goal.
+The Schedule calendar shows all todos and habits Auto Cal has scheduled for the current and next ISO week. Each todo list is a fully interactive HA to-do list — you can add, rename, complete, and set due dates without leaving Home Assistant. Each habit becomes its own device you can log completions on and track against its weekly/monthly goal.
 
 ## Prerequisites
 
@@ -51,13 +51,34 @@ The calendar shows all todos and habits Auto Cal has scheduled for the current a
 
 The integration polls every 15 minutes. You can trigger an immediate refresh from the integration card.
 
+### Entity Names
+
+Entity IDs are derived from the server you configured, so they differ per
+install. For a server at `http://auto-cal.local:4000` you get:
+
+```
+calendar.auto_cal_local_4000_schedule
+calendar.auto_cal_local_4000_time_blocks
+todo.auto_cal_local_4000_work          # one per Auto Cal list
+sensor.exercise_progress               # habits are named after the habit
+button.exercise_log_completion
+```
+
+With an IP address (`http://192.168.1.10:4000`) they become
+`calendar.192_168_1_10_4000_schedule`, and so on. Check **Settings → Devices &
+Services → Auto Cal → entities** for yours, or rename them there — the Lovelace
+cards below pick the right entities for you either way.
+
 ## Supported Features
 
 ### Calendar
 
-- Shows all scheduled todos and habits for the current and next ISO week
-- Events include the item title, activity type, estimated duration, and priority
-- Note: the calendar is read-only and limited to the two-week window Auto Cal schedules ahead
+Two calendars are created:
+
+- **Schedule** — all scheduled todos and habits for the current and next ISO week. Events carry the item title, activity type, estimated duration, and priority.
+- **Time Blocks** — your recurring Auto Cal time blocks (Deep Work, Errands, …), expanded from their weekly recurrence rules. Useful as background context for what a given hour is *for*, even when nothing is scheduled in it.
+
+Both are read-only, and the Schedule calendar is limited to the two-week window Auto Cal schedules ahead.
 
 ### To-do Lists
 
@@ -87,9 +108,14 @@ Habit changes made outside Home Assistant appear on the next 15-minute poll; pre
 
 ## Lovelace Cards
 
-The integration ships two custom cards and registers them automatically — no
-Lovelace resource to add. After restarting Home Assistant they appear in the
-**Add card** picker under *Auto Cal* (hard-refresh the browser once if not).
+The integration ships two custom cards and registers them automatically — there
+is no Lovelace resource to add and nothing to copy into `www/`. After restarting
+Home Assistant, open a dashboard, click **Edit → Add card**, and search for
+*Auto Cal*. Both cards have a visual editor that lists your Auto Cal calendars,
+so you normally never type an entity ID.
+
+The YAML below is what those editors produce. Entity IDs come from your server
+host (see [Entity Names](#entity-names)) — substitute your own.
 
 ### Current Activity
 
@@ -99,8 +125,9 @@ slot is left, and what's next.
 
 ```yaml
 type: custom:auto-cal-activity-card
-entity: calendar.auto_cal_schedule
-blocks_entity: calendar.auto_cal_time_blocks   # optional — shows the surrounding block
+entity: calendar.auto_cal_local_4000_schedule
+# optional — falls back to the surrounding time block when nothing is scheduled
+blocks_entity: calendar.auto_cal_local_4000_time_blocks
 ```
 
 | Option | Default | Description |
@@ -120,15 +147,33 @@ the current time and a list of what is left.
 
 ```yaml
 type: custom:auto-cal-activity-timeline-card
-entity: calendar.auto_cal_schedule
-blocks_entity: calendar.auto_cal_time_blocks
+entity: calendar.auto_cal_local_4000_schedule
+blocks_entity: calendar.auto_cal_local_4000_time_blocks
 start_hour: 7
 end_hour: 22
 ```
 
+| Option | Default | Description |
+|--------|---------|-------------|
+| `entity` | *required* | Auto Cal **Schedule** calendar entity |
+| `blocks_entity` | — | Auto Cal **Time Blocks** calendar; drawn as a faint lane behind the schedule |
+| `name` | `Today` | Card title |
+| `start_hour` / `end_hour` | auto | Clamp the lane to these local hours. Set **both** or neither — left unset, the lane covers 7:00–22:00 widened to fit the day's events |
+| `show_list` | `true` | List of the items still ahead today |
+| `activity_colors` | — | Map of activity name → colour |
+
 Activity colours are derived from the activity name (the iCal feed doesn't carry
 Auto Cal's colours), so they're stable but arbitrary — pin the ones you care
-about with `activity_colors`.
+about with `activity_colors`:
+
+```yaml
+activity_colors:
+  Work: "#6366f1"
+  Exercise: "#22c55e"
+```
+
+Both cards read the calendars through Home Assistant's calendar API, so they
+work on any dashboard and on the companion app without extra setup.
 
 ## Options
 
@@ -143,6 +188,10 @@ To change the server URL or API key after setup, go to **Settings → Devices & 
 **Calendar shows no events** — Auto Cal only schedules items that have a matching time block and an `estimatedLength > 0`. Check that your todos are assigned to a list with an activity type, and that you have time blocks defined for that activity type.
 
 **Todo list is empty** — Verify the API key has `read` scope and that the list exists in Auto Cal.
+
+**Cards don't show up in the card picker** — Restart Home Assistant after installing or updating (the cards are registered during integration setup), then hard-refresh the browser (Ctrl/Cmd+Shift+R) to clear the cached frontend. If a card shows *Custom element doesn't exist*, check **Settings → System → Logs** for an `auto_cal` warning about the missing card bundle.
+
+**A card says "Entity not found"** — The entity ID changed because the server URL changed. Pick the calendar again in the card's visual editor.
 
 ## Development
 
