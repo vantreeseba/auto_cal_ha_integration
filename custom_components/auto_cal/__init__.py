@@ -11,6 +11,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .api import AutoCalApiClient, AutoCalApiError
 from .const import CONF_API_KEY, CONF_URL, DOMAIN, PLATFORMS
 from .coordinator import AutoCalCoordinator
+from .frontend import async_register_cards
 
 
 @dataclass
@@ -22,6 +23,8 @@ class AutoCalData:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Auto Cal from a config entry."""
+    await async_register_cards(hass)
+
     session = async_get_clientsession(hass)
     client = AutoCalApiClient(
         url=entry.data[CONF_URL],

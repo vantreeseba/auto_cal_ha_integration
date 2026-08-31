@@ -1,0 +1,16 @@
+{
+  "name": "auto-cal-ha",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Auto Cal Home Assistant integration — Python integration + Lovelace cards",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev": "npm run dev --workspace packages/frontend",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "license": "MIT"
+}

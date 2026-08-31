@@ -11,6 +11,7 @@ A [Home Assistant](https://www.home-assistant.io/) integration for [Auto Cal](ht
 | **Calendar** | One `calendar` entity showing your scheduled week | Auto Cal's `/ical` endpoint |
 | **To-do lists** | One `todo` entity per Auto Cal list (e.g. Work, Personal) | Auto Cal's GraphQL API |
 | **Habits** | One device per habit — a **Log completion** button, **Progress** + **Completion rate** sensors, and a **Goal met** binary sensor | Auto Cal's GraphQL API |
+| **Lovelace cards** | A **Current Activity** card and an **Activity Timeline** card, installed with the integration | The calendar entities above |
 
 The calendar shows all todos and habits Auto Cal has scheduled for the current and next ISO week. Each todo list is a fully interactive HA to-do list — you can add, rename, complete, and set due dates without leaving Home Assistant. Each habit becomes its own device you can log completions on and track against its weekly/monthly goal.
 
@@ -84,6 +85,51 @@ Each Auto Cal habit is exposed as its own device with these entities:
 
 Habit changes made outside Home Assistant appear on the next 15-minute poll; pressing **Log completion** refreshes immediately. Habits also appear on the **Calendar** when Auto Cal schedules them.
 
+## Lovelace Cards
+
+The integration ships two custom cards and registers them automatically — no
+Lovelace resource to add. After restarting Home Assistant they appear in the
+**Add card** picker under *Auto Cal* (hard-refresh the browser once if not).
+
+### Current Activity
+
+Answers "what should I be doing right now?" — the activity type of whatever Auto
+Cal has scheduled for this moment, shown large, with the item, how much of the
+slot is left, and what's next.
+
+```yaml
+type: custom:auto-cal-activity-card
+entity: calendar.auto_cal_schedule
+blocks_entity: calendar.auto_cal_time_blocks   # optional — shows the surrounding block
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `entity` | *required* | Auto Cal **Schedule** calendar entity |
+| `blocks_entity` | — | Auto Cal **Time Blocks** calendar; used as context, and as the fallback activity when nothing is scheduled |
+| `name` | — | Optional card title |
+| `show_details` | `true` | Item title, Todo/Habit, estimate, priority |
+| `show_progress` | `true` | Progress bar + time remaining in the slot |
+| `show_next` | `true` | "Up next" line |
+| `activity_colors` | — | Map of activity name → colour, e.g. `{Work: "#6366f1"}` |
+
+### Activity Timeline
+
+Today's schedule as a single lane coloured by activity type, with a marker at
+the current time and a list of what is left.
+
+```yaml
+type: custom:auto-cal-activity-timeline-card
+entity: calendar.auto_cal_schedule
+blocks_entity: calendar.auto_cal_time_blocks
+start_hour: 7
+end_hour: 22
+```
+
+Activity colours are derived from the activity name (the iCal feed doesn't carry
+Auto Cal's colours), so they're stable but arbitrary — pin the ones you care
+about with `activity_colors`.
+
 ## Options
 
 To change the server URL or API key after setup, go to **Settings → Devices & Services**, find Auto Cal, and click **Configure**.
@@ -100,13 +146,24 @@ To change the server URL or API key after setup, go to **Settings → Devices & 
 
 ## Development
 
-```bash
-# Install test dependencies (requires Python 3.14)
-pip install ".[test]"
+This repo is a small monorepo: the Python integration lives at
+`custom_components/auto_cal/` (where HACS expects it) and the card source lives
+at `packages/frontend/`, built into `custom_components/auto_cal/www/`.
 
-# Run tests
+```bash
+# Integration (requires Python 3.14)
+pip install ".[test]"
 pytest
+
+# Cards
+npm install
+npm run build      # rebuild custom_components/auto_cal/www/auto-cal-cards.js
+npm run dev        # watch mode
+npm test
 ```
+
+The built bundle is committed so installs need no Node toolchain — rebuild and
+commit it whenever you change `packages/frontend/src`.
 
 See [AGENTS.md](AGENTS.md) for architecture details, API reference, and contributing guidelines.
 
